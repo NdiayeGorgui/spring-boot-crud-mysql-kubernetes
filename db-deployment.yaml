@@ -1,0 +1,78 @@
+# Define a 'Persistent Voulume Claim'(PVC) for Mysql Storage, dynamically provisioned by cluster
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim # name of PVC essential for identifying the storage data
+  labels:
+    app: mysql
+    tier: database
+spec:
+  accessModes:
+    - ReadWriteOnce   #This specifies the mode of the claim that we are trying to create.
+  resources:
+    requests:
+      storage: 2Gi    #This will tell kubernetes about the amount of space we are trying to claim.
+---
+# configure 'Deployment of mysql server'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  labels: 
+    app: mysql
+    trier: database
+spec: 
+  selector:  #mysql pod should contain same labels
+    matchLabels:
+      app: mysql
+      trier: database
+  strategy: 
+    type: Recreate
+  template: 
+    metadata: 
+      labels: #must match service and deployment selectors
+        app: mysql
+        trier: database
+    spec:
+      containers: 
+        - image: mysql:5.7 #image from docker hub
+          args:
+            - "--ignore-db-dir=lost+found" #workaround for https://github.com/docker-library/mysql/issues/186
+          name: mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: root
+            - name: MYSQL_DATABASE # Setting database name from a config map
+              value: javagogo
+          ports:
+            - containerPort: 3306
+              name: mysql
+          volumeMounts: #montting volume obtained from persistent volum claim
+            - name: mysql-persistent-storage
+              mountPath: /var/lib/mysql #this is the path in the container on wich the mounting will take place
+      volumes:
+        - name: mysql-persistent-storage
+          persistentVolumeClaim: 
+            claimName: mysql-pv-claim
+--- 
+  #define a service to expose mysql to other services
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql #DNS name
+  labels: 
+    app: mysql
+    trier: database
+spec:
+  ports:
+    - port: 3306
+      targetPort: 3306
+  selector: #mysql pod should contain same label
+    app: mysql
+    trier: database
+  clusterIP: None #we use DNS , this clusterIP is not relevant
+    
+            
+              
+      
+ 
